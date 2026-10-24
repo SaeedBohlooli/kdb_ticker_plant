@@ -11,16 +11,15 @@ if[not system"p";system"p 5010"]
 // ld:{if[not type key L::`$(-10_string L),string x;.[L;();:;()]];i::j::-11!(-2;L);if[0<=type i;-2 (string L)," is a corrupt log. Truncate to length ",(string last i)," and restart";exit 1];hopen L};
 
 ld:{[dt]
-    if [not type key L::`$(-10_string L),string dt;
+    if[not type key L::`$(-10_string L),string dt;
         .[L;();:;()]
     ];
-    i:j::-11!(-2;L);
+    i::j::-11!(-2;L);
     if[0<=type i;
         -2 (string L)," is a corrupt log. Truncate to length ",(string last i)," and restart";
         exit 1
     ];
-    hopen L;
-    
+    hopen L
  }
 
 tick:{[src;tplog]
@@ -37,7 +36,7 @@ tick:{[src;tplog]
         L::`$":",tplog,"/",src,10#".";
         l::ld d
     ]
-};
+ };
 
 // tick:{init[];if[not min(`time`sym~2#key flip value@)each t;'`timesym];@[;`sym;`g#]each t;d::.z.D;if[l::count y;L::`$":",y,"/",x,10#".";l::ld d]};
 
@@ -56,29 +55,29 @@ ts:{[dt]
 / BATCH MODE: Timer is enabled, use batch publishing
 / Publishes data once per timer tick (1000ms) instead of immediately
 if[system"t";
-  
+
   / Timer callback: Executed every timer tick (1000ms by default)
   .z.ts:{
     / Publish current values of all tables in batch
     / pub' = call pub for each table in parallel
     / value each t = get current data from each table
     pub'[t;value each t];
-    
+
     / Reapply grouping attribute to symbol column for performance
     / @[`.;t;...] = modify global namespace for all tables
     / After publishing, tables are cleared, need to restore g# on empty tables
     @[`.;t;@[;`sym;`g#]0#];
-    
+
     / Reset message counters
     / i = messages in log file
     / j = total messages (log + buffer)
     / After batch publish, both are equal again
     i::j;
-    
+
     / Check if date has changed (detect end-of-day)
     ts .z.D;
   };
-  
+
   / Data insertion function: Handles incoming trades/quotes
   upd:{[tab;data]
     / Handle timestamp: Add time if not already present
@@ -96,19 +95,19 @@ if[system"t";
            a,data;
            (enlist(count first data)#a),data]
     ];
-    
+
     / Insert data into table
     tab insert data;
-    
+
     / Log to disk (if logging enabled)
     if[l;  l enlist (`upd;tab;data);  j+:1  ];
       / Write to log file: (`upd; table_name; data)
-     
+
       / Increment total message counter
-     
-   
+
+
   }
-];
+ ];
 
 // if[not system"t";system"t 1000";
 //  .z.ts:{ts .z.D};

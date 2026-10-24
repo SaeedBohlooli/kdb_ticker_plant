@@ -59,8 +59,8 @@ add:{[tab;syms]
     ];
   / Return table name and initial data (or empty schema if table empty)
   (tab;$[99=type v:value tab;sel[v;syms];@[0#v;`sym;`g#]])
-}
-    
+ }
+
 
 / Subscribe to table(s) with symbol filter
 / If table is backtick: subscribe to ALL tables with same filter
@@ -80,7 +80,7 @@ sub: {[tab;syms]
   del[tab].z.w;
   / Add new subscription
   add[tab;syms]
-}
+ }
 
 / Send end-of-day message to all connected subscribers
 / Collects all subscriber handles, negates them (for sending), then broadcasts .u.end[date]
@@ -88,4 +88,4 @@ sub: {[tab;syms]
 
 end:{[dt]
   (neg union/[w[;;0]])@\:(`.u.end;dt)
-}
+ }
