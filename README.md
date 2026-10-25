@@ -155,3 +155,81 @@ When the RDB receives `.u.end`, it saves its tables to the HDB directory (`.Q.hd
 | `tick/r.q` | Real-time database: subscribes, replays the log, handles end of day |
 | `tick/feed.q` | Dummy feed that publishes random trades and quotes |
 | `tick/tplogs/` | Tickerplant log files, one per day |
+
+## File walkthrough
+
+### `tick/sym.q`: table schemas
+
+```q
+quote:([]time:`timespan$(); sym:`g#`symbol$(); bid:`float$(); bsize:`long$(); ask:`float$(); asize:`long$())
+trade:([]time:`timespan$(); sym:`g#`symbol$(); price:`float$(); size:`int$())
+```
+
+**What it does:** creates two empty tables with fixed column names and types, the system's `CREATE TABLE` statements. It contains no logic.
+
+**Who uses it:** the tickerplant loads it at startup (`tick.q` line 5: `` system"l tick/",src,".q" ``; `sym` in `q tick.q sym ...` is this file's name). The RDB never loads it; it receives the empty tables from the TP when it subscribes, so the schema lives in one place.
+
+#### Syntax
+
+| Piece | Meaning |
+|---|---|
+| `trade: ...` | Assignment (`:` is q's `=`) |
+| `([] c1:v1; c2:v2)` | A table. The empty `[]` means no key columns; a keyed table is `([k:...] c:...)`. `;` separates columns. |
+| `()` | An empty, untyped list |
+| `` `float$() `` | Cast (`$`) the empty list to float: an empty float column. Typed columns reject bad data instead of storing it. |
+| `` `g# `` | Apply the *grouped* attribute: a hash index from each value to its row positions |
+
+A q table is a list of columns, each column one contiguous array, like a pandas DataFrame. That's a big part of why q is fast.
+
+#### Types used
+
+| In sym.q | Type | Char | Number | Example | pandas |
+|---|---|---|---|---|---|
+| `` `timespan$() `` | timespan | `n` | 16 | `0D09:30:00.000000000` | `timedelta64[ns]` |
+| `` `symbol$() `` | symbol | `s` | 11 | `` `AAPL `` | `category` |
+| `` `float$() `` | float | `f` | 9 | `150.5` | `float64` |
+| `` `long$() `` | long | `j` | 7 | `100` | `int64` |
+| `` `int$() `` | int | `i` | 6 | `100i` | `int32` |
+
+- A **negative** type number is an atom (one value) and a **positive** one is a list: `type 150.5` is `-9h`, while `` type `float$() `` is `9h`.
+- Whole numbers default to **long**. Use the `i` suffix for int (`100i`) and `f` or a decimal point for float (`150f`, `150.0`).
+- **Symbol vs string:** `` `AAPL `` is interned (stored once, compared as a number), so it's fast for repeated identifiers. `"AAPL"` is a list of characters, for free text.
+
+#### Attributes
+
+| Attribute | Name | Meaning | Typical use |
+|---|---|---|---|
+| `` `s# `` | sorted | Ascending order, so binary search works | Time columns, `tables[]` output |
+| `` `u# `` | unique | All values distinct (hash lookup) | Keys |
+| `` `p# `` | parted | Equal values stored together in blocks | `sym` on disk in the HDB |
+| `` `g# `` | grouped | Hash index on any column | `sym` in the RDB |
+
+#### Try it
+
+```q
+q)\l tick/sym.q
+q)tables[]
+`s#`quote`trade
+q)meta trade                 / c=column t=type f=foreign key a=attribute
+c    | t f a
+-----| -----
+time | n
+sym  | s   g
+price| f
+size | i
+q)`trade insert (0D09:30:00.000;`AAPL;150.5;100i)
+q)`trade insert (0D09:30:00.000;`AAPL;150;100i)    / 150 is a long, price is float
+'type
+```
+
+q will accept a long into an `int` column (`200` for `200i`), but not a long into a `float` column. Don't rely on this; send the exact type.
+
+#### Key point: inserts go by position
+
+q matches incoming data to columns **by position, not by name**. Every sender must use the same column order as `sym.q`. If `feed.q` sends `bid;ask;bsize;asize` but the table is `bid;bsize;ask;asize`, a float lands in the `long` column `bsize` and the RDB raises `'type`.
+
+#### Practice
+
+1. Add an `ohlc` table (`time`, `sym`, `open`, `high`, `low`, `close`), load the file and run `meta ohlc`.
+2. What do `type 1 2 3` and `type 1.0 2.0` return?
+3. Why is `sym` a symbol and not a string?
